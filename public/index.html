@@ -1,63 +1,140 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Auto Focus Depth Blur</title>
-  <link rel="stylesheet" href="styles.css">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Smart Photo Focus</title>
+    <link rel="stylesheet" href="styles.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <!-- StackBlur library for advanced blur effects -->
+    <script src="https://cdn.jsdelivr.net/npm/stackblur-canvas@2.5.0/dist/stackblur.min.js"></script>
 </head>
 <body>
-  <div class="container">
-    <h1>Auto Focus Depth Blur</h1>
-    <p class="description">Upload an image and let our AI create a professional depth-based blur effect. Uses advanced depth estimation for realistic results.</p>
-    
-    <form id="uploadForm">
-      <div class="upload-area">
-        <input type="file" id="imageInput" accept="image/*" required>
-        <button type="submit" id="analyzeButton">Process Image</button>
-      </div>
-      <div id="loadingIndicator" style="display: none;">
-        <p>Processing image... This may take a few moments.</p>
-      </div>
-    </form>
+    <div class="app-container">
+        <header class="app-header">
+            <h1>Smart Photo Focus</h1>
+            <p>Automatically blur backgrounds and highlight your subject</p>
+        </header>
 
-    <div id="controls" style="display: none;">
-      <div class="controls-grid">
-        <div class="control-group">
-          <h3>Focus Controls</h3>
-          <div class="slider-container">
-            <label for="focusStrengthSlider">Focus Strength:</label>
-            <input type="range" id="focusStrengthSlider" min="0.1" max="3.0" step="0.1" value="1.0">
-            <span class="slider-value">1.0</span>
-          </div>
-        </div>
+        <main class="main-content">
+            <!-- Upload Section -->
+            <section class="upload-section">
+                <div class="upload-card">
+                    <div class="upload-zone" id="uploadZone">
+                        <div class="upload-icon">📸</div>
+                        <h3>Drop your image here or click to browse</h3>
+                        <p>Supports JPG, PNG, WEBP up to 10MB</p>
+                        <input type="file" id="fileInput" accept="image/*" hidden>
+                        <button type="button" class="browse-btn" id="browseBtn">Choose Image</button>
+                    </div>
+                </div>
+            </section>
 
-        <div class="control-group">
-          <h3>Blur Controls</h3>
-          <div class="slider-container">
-            <label for="blurRadiusSlider">Blur Radius:</label>
-            <input type="range" id="blurRadiusSlider" min="3" max="50" value="15">
-            <span class="slider-value">15</span>
-          </div>
-        </div>
-      </div>
+            <!-- Processing Status -->
+            <section class="status-section" id="statusSection" style="display: none;">
+                <div class="status-card">
+                    <div class="status-content">
+                        <div class="loader"></div>
+                        <h3>Processing Your Image</h3>
+                        <p id="statusText">Creating beautiful background blur...</p>
+                        <div class="progress-bar">
+                            <div class="progress-fill" id="progressFill"></div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Results Section -->
+            <section class="results-section" id="resultsSection" style="display: none;">
+                <!-- Controls Panel -->
+                <div class="controls-panel">
+                    <h3>Adjust Your Photo</h3>
+                    <div class="controls-grid">
+                        <div class="control-item">
+                            <label for="focusStrength">Focus Area</label>
+                            <div class="slider-container">
+                                <input type="range" id="focusStrength" min="0.1" max="3.0" step="0.1" value="1.0">
+                                <span class="slider-value" id="focusStrengthValue">1.0</span>
+                            </div>
+                            <small>How much of your subject stays sharp</small>
+                        </div>
+                        
+                        <div class="control-item">
+                            <label for="blurRadius">Background Blur</label>
+                            <div class="slider-container">
+                                <input type="range" id="blurRadius" min="3" max="50" step="1" value="15">
+                                <span class="slider-value" id="blurRadiusValue">15</span>
+                            </div>
+                            <small>How blurry the background becomes</small>
+                        </div>
+
+                        <div class="control-item">
+                            <label for="depthThreshold">Blur Sensitivity</label>
+                            <div class="slider-container">
+                                <input type="range" id="depthThreshold" min="0.1" max="0.9" step="0.05" value="0.5">
+                                <span class="slider-value" id="depthThresholdValue">0.5</span>
+                            </div>
+                            <small>Fine-tune which areas get blurred</small>
+                        </div>
+                    </div>
+                    
+                    <div class="control-actions">
+                        <button class="btn btn-secondary" id="resetBtn">Reset</button>
+                        <button class="btn btn-primary" id="downloadBtn">Download</button>
+                    </div>
+                </div>
+
+                <!-- Image Display Grid -->
+                <div class="image-grid">
+                    <div class="image-card">
+                        <h4>Original Photo</h4>
+                        <div class="image-container">
+                            <img id="originalImage" alt="Original Photo">
+                        </div>
+                    </div>
+                    
+                    <!-- Temporarily hide the depth map section -->
+                    <div class="image-card" style="display: none;">
+                        <h4>Depth Map</h4>
+                        <div class="image-container">
+                            <img id="depthImage" alt="Depth Map">
+                            <div class="depth-legend">
+                                <span class="legend-item"><span class="legend-color dark"></span>Far (Blurred)</span>
+                                <span class="legend-item"><span class="legend-color light"></span>Near (Sharp)</span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="image-card featured">
+                        <h4>Enhanced Photo</h4>
+                        <div class="image-container">
+                            <img id="resultImage" alt="Enhanced Photo">
+                            <canvas id="processingCanvas" style="display: none;"></canvas>
+                            <div class="processing-overlay" id="processingOverlay" style="display: none;">
+                                <div class="mini-loader"></div>
+                                <span>Updating...</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Error Section -->
+            <section class="error-section" id="errorSection" style="display: none;">
+                <div class="error-card">
+                    <div class="error-icon">⚠️</div>
+                    <h3>Something went wrong</h3>
+                    <p id="errorMessage">Please try again with a different image.</p>
+                    <button class="btn btn-primary" id="retryBtn">Try Again</button>
+                </div>
+            </section>
+        </main>
+
+        <footer class="app-footer">
+            <p>Powered by smart photo technology • Instant results</p>
+        </footer>
     </div>
 
-    <div id="result" style="display: none;">
-      <h2>Preview</h2>
-      <div class="image-container">
-        <img id="resultImage" alt="Processed Image">
-      </div>
-      <div class="depth-map-container">
-        <h3>Depth Map</h3>
-        <img id="depthMapImage" alt="Depth Map">
-      </div>
-      <div class="result-controls">
-        <button id="downloadButton" class="primary-button">Download Result</button>
-        <button id="resetButton" class="secondary-button">Reset Controls</button>
-      </div>
-    </div>
-  </div>
-  <script src="script.js"></script>
+    <script src="app.js"></script>
 </body>
 </html> 

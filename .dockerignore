@@ -1,0 +1,17 @@
+.git
+.gitignore
+README.md
+.venv
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.Python
+env
+pip-log.txt
+.DS_Store
+.coverage
+.nyc_output
+node_modules
+public/
+*.log 
