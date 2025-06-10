@@ -33,5 +33,8 @@ steps:
     - '--set-env-vars'
     - 'TORCH_HOME=/tmp'
 
+options:
+  logging: CLOUD_LOGGING_ONLY
+
 images:
   - 'gcr.io/$PROJECT_ID/auto-focus-api:$BUILD_ID' 
