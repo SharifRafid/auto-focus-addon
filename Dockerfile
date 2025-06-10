@@ -3,9 +3,11 @@ FROM python:3.11-slim
 # Set working directory
 WORKDIR /app
 
-# Update package lists and install minimal dependencies
+# Install minimal system dependencies
 RUN apt-get update && apt-get install -y \
     libgomp1 \
+    libgl1-mesa-glx \
+    curl \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy requirements and install Python dependencies
@@ -23,7 +25,7 @@ ENV PORT=8080
 ENV PYTHONUNBUFFERED=1
 ENV PYTHONDONTWRITEBYTECODE=1
 
-# Health check
+# Add health check
 HEALTHCHECK --interval=30s --timeout=30s --start-period=5s --retries=3 \
     CMD curl -f http://localhost:8080/health || exit 1
 

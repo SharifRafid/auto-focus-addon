@@ -10,6 +10,11 @@ import torch.nn.functional as F
 from typing import Dict, Any, Optional
 import logging
 import base64
+import asyncio
+
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 app = FastAPI(title="Auto Focus Depth Blur API", version="1.0.0")
 
@@ -28,9 +33,29 @@ class AutoFocusProcessor:
         self.model = None
         self.transform = None
         self.models_loaded = False
+        self.model_loading = False
+        
+    async def ensure_model_loaded(self):
+        """Ensure model is loaded (lazy loading)"""
+        if self.models_loaded:
+            return
+            
+        if self.model_loading:
+            # Wait for model to finish loading
+            while self.model_loading:
+                await asyncio.sleep(0.1)
+            return
+            
+        await self.load_depth_model()
         
     async def load_depth_model(self):
         """Load lightweight depth estimation model"""
+        if self.models_loaded or self.model_loading:
+            return
+            
+        self.model_loading = True
+        logger.info("Starting to load MiDaS model...")
+        
         try:
             # Load MiDaS small model (faster than full MiDaS)
             self.model = torch.hub.load("intel-isl/MiDaS", "MiDaS_small")
@@ -42,12 +67,14 @@ class AutoFocusProcessor:
             self.transform = midas_transforms.small_transform
             
             self.models_loaded = True
-            logging.info("MiDaS small model loaded successfully")
+            logger.info("MiDaS small model loaded successfully")
             
         except Exception as e:
-            logging.error(f"Error loading depth model: {e}")
+            logger.error(f"Error loading depth model: {e}")
             self.models_loaded = False
             raise e
+        finally:
+            self.model_loading = False
 
     def _estimate_depth(self, image_np: np.ndarray) -> np.ndarray:
         """Estimate depth map using MiDaS"""
@@ -177,8 +204,11 @@ class AutoFocusProcessor:
                                blur_radius: int = 15) -> Dict[str, Any]:
         """Process image with auto focus effect like Canva"""
         
+        # Ensure model is loaded before processing
+        await self.ensure_model_loaded()
+        
         if not self.models_loaded:
-            raise HTTPException(status_code=503, detail="Depth model not loaded")
+            raise HTTPException(status_code=503, detail="Depth model failed to load")
         
         try:
             # Load image
@@ -199,7 +229,7 @@ class AutoFocusProcessor:
                 scale_back = False
             
             # Estimate depth map
-            logging.info("Estimating depth map...")
+            logger.info("Estimating depth map...")
             depth_map = self._estimate_depth(processed_image)
             
             # Find focus plane (subject depth)
@@ -249,16 +279,17 @@ class AutoFocusProcessor:
             }
             
         except Exception as e:
-            logging.error(f"Error processing auto focus: {e}")
+            logger.error(f"Error processing auto focus: {e}")
             raise HTTPException(status_code=500, detail=f"Processing failed: {str(e)}")
 
 # Initialize processor
 processor = AutoFocusProcessor()
 
-@app.on_event("startup")
-async def startup_event():
-    """Load depth model when server starts"""
-    await processor.load_depth_model()
+# Remove the startup event that was causing the timeout
+# @app.on_event("startup")
+# async def startup_event():
+#     """Load depth model when server starts"""
+#     await processor.load_depth_model()
 
 @app.post("/auto-focus")
 async def auto_focus_blur(
@@ -288,7 +319,7 @@ async def auto_focus_blur(
         # Read image bytes
         image_bytes = await file.read()
         
-        # Process with auto focus
+        # Process with auto focus (model will be loaded if needed)
         result = await processor.process_auto_focus(
             image_bytes, focus_strength, blur_radius
         )
@@ -298,7 +329,7 @@ async def auto_focus_blur(
     except HTTPException:
         raise
     except Exception as e:
-        logging.error(f"Unexpected error: {e}")
+        logger.error(f"Unexpected error: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
 
 @app.get("/health")
